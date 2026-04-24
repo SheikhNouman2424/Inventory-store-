@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Pro | Sidebar Custom Edition</title>
+    <!-- Frameworks -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700&family=JetBrains+Mono:wght@500&display=swap');
+        
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-blur: blur(14px);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-print-color-adjust: exact;
+            transition: background 0.5s ease;
+            overflow: hidden;
+        }
+
+        /* Fixed Mouse/Caret Colors */
+        input, textarea {
+            caret-color: currentColor;
+        }
+        ::selection {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Receipt Font Families */
+        .font-receipt-sans { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-receipt-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+        .font-receipt-mono { font-family: 'JetBrains Mono', monospace; }
+        .font-receipt-display { font-family: 'Playfair Display', serif; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+        /* Background Patterns */
+        .bg-mesh {
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+        }
+
+        /* Print Logic */
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; overflow: visible !important; }
+            @page { margin: 0; }
+        }
+        .print-only { display: none; }
+
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Icon Component Helper ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (iconRef.current) {
+                    lucide.createIcons({
+                        attrs: { "stroke-width": 2, width: size, height: size },
+                        nameMap: { [name]: iconRef.current }
+                    });
+                }
+            }, [name, size]);
+            return <i data-lucide={name} className={className} ref={iconRef}></i>;
+        };
+
+        const THEMES = {
+            emerald: { primary: 'bg-emerald-600', text: 'text-emerald-600', border: 'border-emerald-600', hover: 'hover:bg-emerald-700', shadow: 'shadow-emerald-200', hoverText: 'group-hover:text-emerald-500', caret: 'emerald-600' },
+            blue: { primary: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-600', hover: 'hover:bg-blue-700', shadow: 'shadow-blue-200', hoverText: 'group-hover:text-blue-500', caret: 'blue-600' },
+            indigo: { primary: 'bg-indigo-600', text: 'text-indigo-600', border: 'border-indigo-600', hover: 'hover:bg-indigo-700', shadow: 'shadow-indigo-200', hoverText: 'group-hover:text-indigo-500', caret: 'indigo-600' },
+            violet: { primary: 'bg-violet-600', text: 'text-violet-600', border: 'border-violet-600', hover: 'hover:bg-violet-700', shadow: 'shadow-violet-200', hoverText: 'group-hover:text-violet-500', caret: 'violet-600' },
+            rose: { primary: 'bg-rose-600', text: 'text-rose-600', border: 'border-rose-600', hover: 'hover:bg-rose-700', shadow: 'shadow-rose-200', hoverText: 'group-hover:text-rose-500', caret: 'rose-600' },
+            amber: { primary: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500', hover: 'hover:bg-amber-600', shadow: 'shadow-amber-200', hoverText: 'group-hover:text-amber-500', caret: 'amber-500' },
+            cyan: { primary: 'bg-cyan-500', text: 'text-cyan-500', border: 'border-cyan-500', hover: 'hover:bg-cyan-600', shadow: 'shadow-cyan-200', hoverText: 'group-hover:text-cyan-400', caret: 'cyan-500' },
+            slate: { primary: 'bg-slate-800', text: 'text-slate-800', border: 'border-slate-800', hover: 'hover:bg-slate-900', shadow: 'shadow-slate-200', hoverText: 'group-hover:text-slate-400', caret: 'slate-800' },
+        };
+
+        const SIDEBAR_THEMES = {
+            light: { bg: 'bg-white/80', text: 'text-slate-900', sub: 'text-slate-400', active: 'bg-slate-100', navHover: 'hover:bg-slate-100', border: 'border-r border-slate-200' },
+            dark: { bg: 'bg-slate-950', text: 'text-white', sub: 'text-slate-500', active: 'bg-white/10', navHover: 'hover:bg-white/5', border: 'border-r border-white/5' },
+            brand: { bg: 'bg-indigo-950', text: 'text-white', sub: 'text-indigo-300', active: 'bg-white/10', navHover: 'hover:bg-white/5', border: 'border-r border-white/5' },
+            transparent: { bg: 'glass-panel', text: 'text-slate-900', sub: 'text-slate-500', active: 'bg-white/50', navHover: 'hover:bg-black/5', border: 'border-r border-white/20' },
+            midnight: { bg: 'bg-black', text: 'text-slate-200', sub: 'text-slate-600', active: 'bg-zinc-900', navHover: 'hover:bg-zinc-900', border: 'border-r border-zinc-800' },
+            forest: { bg: 'bg-emerald-950', text: 'text-emerald-50', sub: 'text-emerald-500', active: 'bg-emerald-900/50', navHover: 'hover:bg-emerald-900/30', border: 'border-r border-emerald-900' },
+            crimson: { bg: 'bg-rose-950', text: 'text-rose-50', sub: 'text-rose-400', active: 'bg-rose-900/50', navHover: 'hover:bg-rose-900/30', border: 'border-r border-rose-900' }
+        };
+
+        const BACKGROUNDS = {
+            default: 'bg-slate-50',
+            mesh: 'bg-mesh',
+            dark: 'bg-slate-950',
+            soft: 'bg-gradient-to-br from-indigo-50 via-white to-emerald-50',
+            sunset: 'bg-gradient-to-tr from-rose-50 to-orange-50'
+        };
+
+        const RECEIPT_FONTS = {
+            sans: { label: 'Standard Sans', class: 'font-receipt-sans' },
+            serif: { label: 'Classic Serif', class: 'font-receipt-serif' },
+            mono: { label: 'Technical Mono', class: 'font-receipt-mono' },
+            display: { label: 'Elegant Display', class: 'font-receipt-display' }
+        };
+
+        const App = () => {
+            const [inventory, setInventory] = useState(() => JSON.parse(localStorage.getItem('inv_v3') || '[]'));
+            const [sales, setSales] = useState(() => JSON.parse(localStorage.getItem('sales_v3') || '[]'));
+            const [settings, setSettings] = useState(() => {
+                const saved = localStorage.getItem('settings_v3');
+                return saved ? JSON.parse(saved) : {
+                    shopName: 'Elite Boutique',
+                    logoUrl: '',
+                    theme: 'indigo',
+                    background: 'soft',
+                    bgImageUrl: '',
+                    isGlass: true,
+                    density: 'comfortable',
+                    currency: '$',
+                    address: '77 Brand Avenue, Fashion City',
+                    phone: '+1 555 900 120',
+                    receiptStyle: 'modern',
+                    receiptFont: 'sans',
+                    sidebarTheme: 'transparent',
+                    sidebarSide: 'left',
+                    sidebarWidth: 'standard',
+                    sidebarRounded: 'none',
+                    animateIcons: true
+                };
+            });
+
+            useEffect(() => {
+                localStorage.setItem('inv_v3', JSON.stringify(inventory));
+                localStorage.setItem('sales_v3', JSON.stringify(sales));
+                localStorage.setItem('settings_v3', JSON.stringify(settings));
+            }, [inventory, sales, settings]);
+
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [cart, setCart] = useState([]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingProduct, setEditingProduct] = useState(null);
+            const [receiptData, setReceiptData] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+
+            const theme = THEMES[settings.theme];
+            const sbTheme = SIDEBAR_THEMES[settings.sidebarTheme] || SIDEBAR_THEMES.transparent;
+            const bgClass = BACKGROUNDS[settings.background] || 'bg-slate-50';
+
+            // BUG FIX 1: Enforce positive stock during addition/edit
+            const handleAddProduct = (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const rawStock = parseInt(fd.get('stock'));
+                
+                // Logic check: ensuring stock is at least 0 (no negatives allowed)
+                const safeStock = Math.max(0, isNaN(rawStock) ? 0 : rawStock);
+
+                const product = {
+                    id: editingProduct?.id || Date.now(),
+                    name: fd.get('name'),
+                    sku: fd.get('sku'),
+                    price: parseFloat(fd.get('price')),
+                    stock: safeStock,
+                    category: fd.get('category')
+                };
+                setInventory(prev => editingProduct ? prev.map(p => p.id === product.id ? product : p) : [...prev, product]);
+                setIsModalOpen(false);
+                setEditingProduct(null);
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.inventory) setInventory(data.inventory);
+                        if (data.sales) setSales(data.sales);
+                        if (data.settings) setSettings(data.settings);
+                    } catch (err) { console.error("Restore failed", err); }
+                };
+                reader.readAsText(file);
+            };
+
+            const exportData = () => {
+                const data = JSON.stringify({ inventory, sales, settings });
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `inventory_pro_backup.json`;
+                a.click();
+            };
+
+            // BUG FIX 2: Prevent adding items to cart if out of stock OR if cart quantity would exceed stock
+            const addToCart = (product) => {
+                // Find actual current inventory item to be safe
+                const invItem = inventory.find(i => i.id === product.id);
+                if (!invItem || invItem.stock <= 0) return;
+
+                setCart(prev => {
+                    const existing = prev.find(p => p.id === product.id);
+                    if (existing) {
+                        // Check if we are trying to add more than what's available in inventory
+                        if (existing.qty >= invItem.stock) return prev;
+                        return prev.map(p => p.id === product.id ? {...p, qty: p.qty + 1} : p);
+                    }
+                    return [...prev, {...product, qty: 1}];
+                });
+            };
+
+            const processSale = () => {
+                if (!cart.length) return;
+                const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+                const sale = { id: Date.now(), timestamp: new Date().toLocaleString(), items: [...cart], total, receiptNo: Math.floor(100000 + Math.random() * 900000) };
+                
+                // Final safety check before reducing stock: ensure we don't go negative
+                setInventory(prev => prev.map(i => {
+                    const ci = cart.find(c => c.id === i.id);
+                    if (ci) {
+                        return {...i, stock: Math.max(0, i.stock - ci.qty)};
+                    }
+                    return i;
+                }));
+                
+                setSales(prev => [sale, ...prev]);
+                setReceiptData(sale);
+                setCart([]);
+            };
+
+            const NavItem = ({ id, icon, label }) => {
+                const isActive = activeTab === id;
+                return (
+                    <button onClick={() => setActiveTab(id)} className={`group w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 ${isActive ? `${theme.primary} text-white shadow-xl ${theme.shadow}` : `${sbTheme.text} ${sbTheme.navHover}`}`}>
+                        <Icon name={icon} className={`transition-all duration-300 ${settings.animateIcons ? 'group-hover:scale-125' : ''} ${isActive ? 'text-white' : sbTheme.sub}`} />
+                        {settings.sidebarWidth === 'standard' && <span className={`font-bold text-sm tracking-tight ${isActive ? 'text-white' : 'group-hover:translate-x-1 transition-transform'}`}>{label}</span>}
+                    </button>
+                );
+            };
+
+            const stats = useMemo(() => ({
+                revenue: sales.reduce((a, s) => a + s.total, 0),
+                assets: inventory.reduce((a, i) => a + (i.price * i.stock), 0),
+                low: inventory.filter(i => i.stock < 10).length,
+                skus: inventory.length
+            }), [inventory, sales]);
+
+            const sidebarClasses = [
+                settings.sidebarWidth === 'standard' ? 'w-72' : 'w-24',
+                sbTheme.bg, sbTheme.border,
+                settings.sidebarRounded === 'full-rounded' ? 'm-6 rounded-[2.5rem] h-[calc(100vh-3rem)] border shadow-2xl' : 'h-screen',
+                'p-6 flex flex-col no-print shrink-0 z-50 transition-all duration-500'
+            ].join(' ');
+
+            const containerStyle = {
+                flexDirection: settings.sidebarSide === 'right' ? 'row-reverse' : 'row',
+                backgroundImage: settings.background === 'custom' && settings.bgImageUrl ? `url(${settings.bgImageUrl})` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed'
+            };
+
+            return (
+                <div className={`flex h-screen ${bgClass} transition-all duration-700`} style={containerStyle}>
+                    
+                    <aside className={sidebarClasses}>
+                        <div className={`flex items-center gap-4 mb-10 ${settings.sidebarWidth === 'slim' ? 'justify-center' : 'px-2'}`}>
+                            {settings.logoUrl ? (
+                                <img src={settings.logoUrl} className="w-12 h-12 rounded-2xl object-cover" alt="Logo" />
+                            ) : (
+                                <div className={`p-3 rounded-2xl ${theme.primary} text-white`}><Icon name="layers" /></div>
+                            )}
+                            {settings.sidebarWidth === 'standard' && (
+                                <div className="overflow-hidden">
+                                    <h1 className={`${sbTheme.text} font-black truncate text-lg tracking-tighter`}>{settings.shopName}</h1>
+                                    <p className={`${sbTheme.sub} text-[10px] font-black uppercase opacity-60`}>Pro Terminal</p>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <nav className="space-y-2 flex-1">
+                            <NavItem id="dashboard" icon="layout-dashboard" label="Business Hub" />
+                            <NavItem id="inventory" icon="package" label="Inventory" />
+                            <NavItem id="pos" icon="shopping-bag" label="POS Terminal" />
+                            <NavItem id="sales" icon="bar-chart-3" label="Sales Logs" />
+                            <NavItem id="settings" icon="settings" label="Settings" />
+                        </nav>
+
+                        <div className="space-y-4 pt-4 border-t border-black/5">
+                            <label className={`cursor-pointer group flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${sbTheme.navHover}`}>
+                                <Icon name="upload-cloud" className={sbTheme.sub} />
+                                {settings.sidebarWidth === 'standard' && <span className={`font-bold text-xs ${sbTheme.text}`}>Restore Data</span>}
+                                <input type="file" className="hidden" accept=".json" onChange={importData} />
+                            </label>
+
+                            <div className={`p-4 rounded-3xl ${sbTheme.active} flex items-center justify-between`}>
+                                <div className={`flex items-center gap-2 ${settings.sidebarWidth === 'slim' ? 'hidden' : ''}`}>
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className={`text-[10px] font-bold uppercase ${sbTheme.text}`}>Local DB</span>
+                                </div>
+                                <button onClick={exportData} title="Backup" className={`${sbTheme.sub} hover:${theme.text} mx-auto`}><Icon name="download" size={18}/></button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <main className={`flex-1 h-screen overflow-y-auto ${settings.density === 'compact' ? 'p-4' : 'p-10'} no-print relative`}>
+                        <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div>
+                                <h2 className={`text-3xl font-black ${settings.background === 'dark' ? 'text-white' : 'text-slate-800'} tracking-tighter capitalize`}>{activeTab.replace('-', ' ')}</h2>
+                            </div>
+                            <div className={`relative ${settings.isGlass ? 'glass-panel' : 'bg-white'} rounded-2xl px-4 py-2 border shadow-lg`}>
+                                <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input type="text" placeholder="Search..." className="bg-transparent pl-8 pr-2 outline-none text-sm font-bold w-full md:w-64" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                            </div>
+                        </header>
+
+                        {activeTab === 'dashboard' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
+                                {[
+                                    { label: 'Revenue', val: settings.currency + stats.revenue.toLocaleString(), icon: 'trending-up', color: 'emerald' },
+                                    { label: 'Asset Value', val: settings.currency + stats.assets.toLocaleString(), icon: 'banknote', color: 'blue' },
+                                    { label: 'Low Stock', val: stats.low, icon: 'alert-octagon', color: 'rose' },
+                                    { label: 'SKU Count', val: stats.skus, icon: 'grid', color: 'violet' }
+                                ].map((card, i) => (
+                                    <div key={i} className={`p-8 rounded-[2rem] border shadow-xl ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                        <div className="flex items-start justify-between mb-4">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{card.label}</p>
+                                            <div className={`p-3 rounded-2xl bg-${card.color}-500/10 text-${card.color}-600`}><Icon name={card.icon} size={24} /></div>
+                                        </div>
+                                        <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{card.val}</h3>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'settings' && (
+                            <div className="max-w-5xl mx-auto space-y-10 animate-fade-in pb-20">
+                                {/* Workspace & Visuals */}
+                                <div className={`p-10 rounded-[2rem] border shadow-xl ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                    <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3"><Icon name="monitor" /> Workspace & Visuals</h3>
+                                    <div className="space-y-10">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Accent Color</label>
+                                            <div className="grid grid-cols-4 lg:grid-cols-8 gap-4">
+                                                {Object.keys(THEMES).map(t => (
+                                                    <button key={t} onClick={() => setSettings({...settings, theme: t})} className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${settings.theme === t ? THEMES[t].border + ' bg-white shadow-lg' : 'border-transparent bg-black/5'}`}>
+                                                        <div className={`w-6 h-6 rounded-full ${THEMES[t].primary}`}></div>
+                                                        <span className="text-[8px] font-black uppercase text-slate-500">{t}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Background Mode</label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {Object.keys(BACKGROUNDS).map(bg => (
+                                                        <button key={bg} onClick={() => setSettings({...settings, background: bg})} className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase border-2 transition-all ${settings.background === bg ? theme.border + ' ' + theme.text : 'border-transparent bg-black/5'}`}>{bg}</button>
+                                                    ))}
+                                                    <button onClick={() => setSettings({...settings, background: 'custom'})} className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase border-2 transition-all ${settings.background === 'custom' ? theme.border + ' ' + theme.text : 'border-transparent bg-black/5'}`}>Custom</button>
+                                                </div>
+                                                {settings.background === 'custom' && (
+                                                    <input className="w-full mt-3 p-4 border rounded-2xl bg-black/5 outline-none font-bold text-xs" placeholder="Paste Image URL..." value={settings.bgImageUrl} onChange={e => setSettings({...settings, bgImageUrl: e.target.value})} />
+                                                )}
+                                            </div>
+                                            <div className="space-y-6">
+                                                <button onClick={() => setSettings({...settings, isGlass: !settings.isGlass})} className={`w-full p-4 rounded-xl border-2 flex justify-between items-center transition-all ${settings.isGlass ? theme.border + ' ' + theme.text : 'border-transparent bg-black/5 opacity-50'}`}>
+                                                    <span className="font-black text-[10px] uppercase">Glassmorphism Effect</span>
+                                                    <Icon name={settings.isGlass ? "check-circle" : "circle"} size={16}/>
+                                                </button>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Display Density</label>
+                                                    <div className="flex bg-black/5 p-1 rounded-xl">
+                                                        {['comfortable', 'compact'].map(d => <button key={d} onClick={() => setSettings({...settings, density: d})} className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase ${settings.density === d ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>{d}</button>)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Sidebar Architecture */}
+                                <div className={`p-10 rounded-[2rem] border shadow-xl ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                    <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3"><Icon name="palette" /> Sidebar Color Schemes</h3>
+                                    <div className="space-y-8">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Active Palette</label>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                                                {Object.keys(SIDEBAR_THEMES).map(t => (
+                                                    <button 
+                                                        key={t} 
+                                                        onClick={() => setSettings({...settings, sidebarTheme: t})} 
+                                                        className={`group relative overflow-hidden p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${settings.sidebarTheme === t ? theme.border + ' bg-white shadow-lg' : 'border-transparent bg-black/5'}`}
+                                                    >
+                                                        <div className={`w-10 h-10 rounded-xl ${SIDEBAR_THEMES[t].bg} ${SIDEBAR_THEMES[t].border} flex items-center justify-center shadow-inner`}>
+                                                            <div className={`w-3 h-3 rounded-full ${SIDEBAR_THEMES[t].text.replace('text-', 'bg-')}`}></div>
+                                                        </div>
+                                                        <span className="text-[8px] font-black uppercase text-slate-500">{t}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-4 border-t border-black/5">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Position</label>
+                                                    <div className="flex bg-black/5 p-1 rounded-xl">
+                                                        {['left', 'right'].map(s => <button key={s} onClick={() => setSettings({...settings, sidebarSide: s})} className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase ${settings.sidebarSide === s ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>{s}</button>)}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Width</label>
+                                                    <div className="flex bg-black/5 p-1 rounded-xl">
+                                                        {['standard', 'slim'].map(w => <button key={w} onClick={() => setSettings({...settings, sidebarWidth: w})} className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase ${settings.sidebarWidth === w ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>{w}</button>)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-6">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Visual Shape</label>
+                                                    <div className="flex bg-black/5 p-1 rounded-xl">
+                                                        {['none', 'full-rounded'].map(r => <button key={r} onClick={() => setSettings({...settings, sidebarRounded: r})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase ${settings.sidebarRounded === r ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>{r === 'none' ? 'Edge' : 'Floating'}</button>)}
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => setSettings({...settings, animateIcons: !settings.animateIcons})} className={`w-full p-4 rounded-xl border-2 flex justify-between items-center ${settings.animateIcons ? theme.border + ' ' + theme.text : 'border-black/5 opacity-40'}`}>
+                                                    <span className="font-black text-[10px] uppercase">Icon Animations</span>
+                                                    <Icon name={settings.animateIcons ? "check-circle" : "circle"} size={16}/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Shop Identity & Receipt Customization */}
+                                <div className={`p-10 rounded-[2rem] border shadow-xl ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                    <h3 className="text-xl font-black text-slate-800 mb-8 border-b border-black/5 pb-4">Shop & Receipt Identity</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                        <div className="space-y-6">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Shop Name</label>
+                                                <input className={`w-full p-5 border rounded-3xl bg-black/5 outline-none font-extrabold focus:ring-2 focus:ring-${theme.caret}`} value={settings.shopName} onChange={e => setSettings({...settings, shopName: e.target.value})} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Address</label>
+                                                <textarea className={`w-full p-5 border rounded-3xl bg-black/5 outline-none font-bold text-sm focus:ring-2 focus:ring-${theme.caret}`} rows="2" value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} />
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <div className="flex-1 space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase">Currency</label>
+                                                    <input className={`w-full p-4 border rounded-3xl bg-black/5 outline-none font-black text-center focus:ring-2 focus:ring-${theme.caret}`} value={settings.currency} onChange={e => setSettings({...settings, currency: e.target.value})} />
+                                                </div>
+                                                <div className="flex-[2] space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase">Phone</label>
+                                                    <input className={`w-full p-4 border rounded-3xl bg-black/5 outline-none font-black focus:ring-2 focus:ring-${theme.caret}`} value={settings.phone} onChange={e => setSettings({...settings, phone: e.target.value})} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-8">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase block mb-4">Receipt Layout</label>
+                                                <div className="flex gap-2">
+                                                    {['modern', 'classic', 'thermal'].map(st => (
+                                                        <button key={st} onClick={() => setSettings({...settings, receiptStyle: st})} className={`flex-1 px-4 py-3 rounded-2xl font-black text-[10px] uppercase border-2 ${settings.receiptStyle === st ? theme.border + ' ' + theme.text : 'border-black/5 opacity-40'}`}>{st}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase block mb-4">Receipt Typography</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {Object.entries(RECEIPT_FONTS).map(([key, f]) => (
+                                                        <button key={key} onClick={() => setSettings({...settings, receiptFont: key})} className={`px-4 py-3 rounded-xl border-2 transition-all ${settings.receiptFont === key ? theme.border + ' ' + theme.text : 'border-black/5 opacity-50'}`}>
+                                                            <span className={`block text-[10px] font-black uppercase ${f.class}`}>{f.label}</span>
+                                                            <span className={`block text-[8px] opacity-40 ${f.class}`}>Abc 123</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'inventory' && (
+                            <div className={`rounded-[2rem] border shadow-xl overflow-hidden animate-fade-in ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                <div className="p-8 border-b flex justify-between items-center">
+                                    <h3 className="font-black text-slate-800 uppercase text-xs">Stock Registry</h3>
+                                    <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className={`px-8 py-3 rounded-2xl text-white font-black text-sm uppercase ${theme.primary} shadow-xl active:scale-95 transition-all`}>New SKU</button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-black/5 text-[10px] text-slate-500 font-black uppercase">
+                                            <tr><th className="px-8 py-5">Product</th><th className="px-8 py-5">Class</th><th className="px-8 py-5">Price</th><th className="px-8 py-5">Stock</th><th className="px-8 py-5 text-center">Manage</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-black/5">
+                                            {inventory.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase())).map(item => (
+                                                <tr key={item.id} className="hover:bg-black/5">
+                                                    <td className="px-8 py-5"><p className="font-black text-slate-800">{item.name}</p><p className="text-[10px] text-slate-400">{item.sku}</p></td>
+                                                    <td className="px-8 py-5"><span className="px-3 py-1 rounded-lg bg-black/5 text-slate-500 text-[9px] font-black uppercase">{item.category}</span></td>
+                                                    <td className="px-8 py-5 font-black">{settings.currency}{item.price.toFixed(2)}</td>
+                                                    <td className="px-8 py-5">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full ${item.stock < 10 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                                                            <span className="font-black text-xs">{item.stock} Units</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-8 py-5 text-center">
+                                                        <div className="flex justify-center gap-3">
+                                                            <button onClick={() => { setEditingProduct(item); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="edit" size={16} /></button>
+                                                            <button onClick={() => setInventory(inventory.filter(p => p.id !== item.id))} className="p-2 text-slate-300 hover:text-rose-500"><Icon name="trash-2" size={16} /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'pos' && (
+                            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 animate-fade-in">
+                                <div className="xl:col-span-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                    {inventory.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase())).map(item => {
+                                        const cartItem = cart.find(c => c.id === item.id);
+                                        const cartQty = cartItem ? cartItem.qty : 0;
+                                        const isOutOfStock = item.stock <= 0;
+                                        const isLimitReached = cartQty >= item.stock;
+
+                                        return (
+                                            <button 
+                                                key={item.id} 
+                                                onClick={() => addToCart(item)} 
+                                                disabled={isOutOfStock || isLimitReached} 
+                                                className={`p-6 text-left rounded-[2rem] border shadow-xl transition-all hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}
+                                            >
+                                                <h4 className="font-black text-slate-800 text-sm mb-1">{item.name}</h4>
+                                                <p className="text-2xl font-black text-slate-900 mb-6">{settings.currency}{item.price.toFixed(2)}</p>
+                                                <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase">
+                                                    <span>{item.sku}</span>
+                                                    <span className={item.stock < 10 ? 'text-rose-500' : 'text-emerald-500'}>
+                                                        {isOutOfStock ? "Out of Stock" : isLimitReached ? "Limit Reached" : `${item.stock} Stock`}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className={`xl:col-span-4 p-8 rounded-[2rem] border shadow-xl flex flex-col h-[calc(100vh-14rem)] sticky top-6 ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                    <h3 className="font-black text-slate-800 mb-8 flex items-center gap-3"><Icon name="shopping-bag" /> Checkout</h3>
+                                    <div className="flex-1 overflow-y-auto space-y-6 mb-8 pr-2">
+                                        {cart.map(item => (
+                                            <div key={item.id} className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <p className="font-black text-slate-800 text-xs leading-tight">{item.name}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold mt-1">{item.qty} x {settings.currency}{item.price}</p>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-black text-slate-900">{settings.currency}{(item.price * item.qty).toFixed(2)}</span>
+                                                    <button onClick={() => setCart(cart.filter(c => c.id !== item.id))} className="text-rose-300 hover:text-rose-600">
+                                                        <Icon name="x-circle" size={16}/>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="border-t border-black/5 pt-8">
+                                        <div className="flex justify-between text-3xl font-black text-slate-900 mb-8 tracking-tighter">
+                                            <span>Total</span>
+                                            <span>{settings.currency}{cart.reduce((a,c) => a+(c.price*c.qty), 0).toFixed(2)}</span>
+                                        </div>
+                                        <button onClick={processSale} disabled={!cart.length} className={`w-full py-5 rounded-[1.5rem] text-white font-black text-lg ${theme.primary} shadow-xl active:scale-95 disabled:grayscale`}>Finalize Order</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'sales' && (
+                            <div className={`rounded-[2rem] border shadow-xl overflow-hidden animate-fade-in ${settings.isGlass ? 'glass-panel' : 'bg-white'}`}>
+                                <div className="p-8 border-b"><h3 className="font-black text-slate-800 uppercase text-xs">Historical Sales</h3></div>
+                                <table className="w-full text-left">
+                                    <thead className="bg-black/5 text-[10px] text-slate-500 font-black uppercase"><tr><th className="px-8 py-5">TX ID</th><th className="px-8 py-5">Timestamp</th><th className="px-8 py-5">Paid</th><th className="px-8 py-5 text-center">Receipt</th></tr></thead>
+                                    <tbody className="divide-y divide-black/5">
+                                        {sales.map(sale => (
+                                            <tr key={sale.id} className="hover:bg-black/5"><td className="px-8 py-5 font-black text-slate-700">#{sale.receiptNo}</td><td className="px-8 py-5 text-slate-500 font-bold">{sale.timestamp}</td><td className="px-8 py-5 font-black">{settings.currency}{sale.total.toFixed(2)}</td><td className="px-8 py-5 text-center"><button onClick={() => setReceiptData(sale)} className="p-2.5 text-slate-300 hover:text-slate-900 transition-colors"><Icon name="printer" size={18} /></button></td></tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* ENTRY MODAL */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in">
+                                <div className={`p-10 ${theme.primary} text-white flex justify-between items-center`}>
+                                    <h3 className="font-black text-3xl tracking-tighter">{editingProduct ? 'Modify Asset' : 'New Entry'}</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-full"><Icon name="x" size={24}/></button>
+                                </div>
+                                <form className="p-12 grid grid-cols-2 gap-8" onSubmit={handleAddProduct}>
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Display Title</label>
+                                        <input name="name" defaultValue={editingProduct?.name} required className={`w-full p-5 border-2 rounded-3xl bg-slate-50 outline-none font-black focus:border-${theme.caret}`} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unique SKU</label>
+                                        <input name="sku" defaultValue={editingProduct?.sku} required className={`w-full p-5 border-2 rounded-3xl bg-slate-50 outline-none font-black uppercase focus:border-${theme.caret}`} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Categorization</label>
+                                        <input name="category" defaultValue={editingProduct?.category} required className={`w-full p-5 border-2 rounded-3xl bg-slate-50 outline-none font-black focus:border-${theme.caret}`} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Market Price</label>
+                                        <input name="price" type="number" step="0.01" min="0" defaultValue={editingProduct?.price} required className={`w-full p-5 border-2 rounded-3xl bg-slate-50 outline-none font-black text-2xl focus:border-${theme.caret}`} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stock Units</label>
+                                        {/* BUG FIX 1: Added min="0" to input for UI level validation */}
+                                        <input name="stock" type="number" min="0" defaultValue={editingProduct?.stock} required className={`w-full p-5 border-2 rounded-3xl bg-slate-50 outline-none font-black text-2xl focus:border-${theme.caret}`} />
+                                    </div>
+                                    <div className="col-span-2 pt-8">
+                                        <button type="submit" className={`w-full py-6 rounded-[2rem] text-white font-black text-lg ${theme.primary} shadow-xl uppercase tracking-widest`}>Execute Sync</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* RECEIPT MODAL */}
+                    {receiptData && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 no-print">
+                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in relative">
+                                <button onClick={() => setReceiptData(null)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900"><Icon name="x-circle" size={24}/></button>
+                                <div className={`p-10 space-y-8 ${settings.receiptStyle === 'thermal' ? 'font-mono text-xs' : ''} ${RECEIPT_FONTS[settings.receiptFont]?.class || ''}`} id="receipt-printable">
+                                    <div className="text-center space-y-3">
+                                        {settings.logoUrl && <img src={settings.logoUrl} className="h-16 mx-auto mb-4 grayscale" />}
+                                        <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-950">{settings.shopName}</h2>
+                                        <p className="text-[10px] text-slate-400 font-black uppercase">{settings.address}</p>
+                                    </div>
+                                    <div className="flex justify-between text-[10px] font-black text-slate-400 italic"><span>#{receiptData.receiptNo}</span><span>{receiptData.timestamp}</span></div>
+                                    <div className="space-y-5 py-8 border-y-2 border-dashed border-slate-100">
+                                        {receiptData.items.map((item, i) => (
+                                            <div key={i} className="flex justify-between items-start">
+                                                <div className="flex-1 pr-6"><p className="font-black text-slate-800 text-xs uppercase">{item.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{item.qty} x {settings.currency}{item.price}</p></div>
+                                                <span className="font-black text-slate-950">{settings.currency}{(item.price * item.qty).toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-between items-baseline"><span className="text-sm font-black text-slate-400 uppercase">Total</span><span className="text-4xl font-black text-slate-950 tracking-tighter">{settings.currency}{receiptData.total.toFixed(2)}</span></div>
+                                </div>
+                                <div className="bg-slate-50 p-8 flex gap-4 no-print">
+                                    <button onClick={() => { window.print(); setReceiptData(null); }} className={`flex-1 py-5 rounded-2xl text-white font-black text-sm shadow-xl ${theme.primary} flex items-center justify-center gap-3`}>
+                                        <Icon name="printer" /> Print Ticket
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
