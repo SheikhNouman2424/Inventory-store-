@@ -1,4 +1,4 @@
 # Inventory-store-
 This is a basic inventory software that can be used at any offline shop or physical business. 
-User friendly and customiable 
-Receipt printing system 
+User friendly and customiable with Receipt printing system 
+
